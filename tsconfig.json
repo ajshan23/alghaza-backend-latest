@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", // Updated to a newer ECMAScript version for modern features
+    "module": "commonjs", // Keep if using Node.js (default for backend)
+    "moduleResolution": "node", // Required for Node.js
+    "outDir": "./dist", // Compiled JS output directory
+    "rootDir": "./src", // Source directory
+    "strict": true, // Enable all strict type-checking options
+    "esModuleInterop": true, // Allows default imports from CommonJS modules (fixes Express import)
+    "skipLibCheck": true, // Skip type-checking of declaration files (faster builds)
+    "forceConsistentCasingInFileNames": true, // Prevent case-sensitive import errors
+    "resolveJsonModule": true, // Allows importing JSON files
+    "allowJs": true, // Allow JavaScript files to be compiled (helpful for migration)
+    "checkJs": false, // Disable JS type-checking (set to `true` if you want TS to check JS files)
+    "baseUrl": "./src", // Base directory for module resolution
+    "paths": {
+      "@/*": ["*"] // Path aliases (e.g., `@/utils/errorHandler`)
+    },
+    "isolatedModules": true, // Ensures each file can be transpiled independently (important for Babel/SWC)
+    "noImplicitAny": true, // Ensures no `any` types slip through (recommended)
+    "strictNullChecks": true, // Helps avoid null/undefined bugs
+    "sourceMap": true, // Generate source maps for debugging
+    "inlineSources": true // Include original TS source in source maps
+  },
+  "include": ["src/**/*"], // Files to include in compilation
+  "exclude": ["node_modules", "dist", "**/*.test.ts"] // Exclude unnecessary files
+}
