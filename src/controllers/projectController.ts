@@ -14,6 +14,7 @@ import dayjs from "dayjs";
 import { Types } from "mongoose";
 import { generateProjectNumber } from "../utils/documentNumbers";
 import { WorkProgressTemplateParams } from "@/template/workProgressEmailTemplate";
+import { Expense } from "../models/expenseModel";
 
 // Status transition validation
 const validStatusTransitions: Record<string, string[]> = {
@@ -230,7 +231,7 @@ export const getProject = asyncHandler(async (req: Request, res: Response) => {
   );
   const quotation = await Quotation.findOne({ project: id }).select("_id");
   const Lpo = await LPO.findOne({ project: id }).select("_id");
-
+  const expense = await Expense.findOne({ project: id }).select("_id");
   const responseData = {
     ...project.toObject(),
     estimationId: estimation?._id || null,
@@ -238,6 +239,7 @@ export const getProject = asyncHandler(async (req: Request, res: Response) => {
     lpoId: Lpo?._id || null,
     isChecked: estimation?.isChecked || false,
     isApproved: estimation?.isApproved || false,
+    expenseId: expense?._id || null,
   };
 
   res

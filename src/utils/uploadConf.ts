@@ -20,6 +20,8 @@ const USER_IMAGES_FOLDER = "user-images";
 const ITEM_IMAGES_FOLDER = "item-images";
 const SIGNATURES_FOLDER = "signatures";
 const WORK_COMPLETION_FOLDER = "work-completion-images";
+const EMIRATES_ID_FOLDER = "emirates-id-documents";
+const PASSPORT_FOLDER = "passport-documents";
 
 function generateUniqueFileName(file: Express.Multer.File): string {
   const extension = path.extname(file.originalname);
@@ -116,6 +118,116 @@ export async function uploadUserProfileImage(
     return {
       success: false,
       message: "User profile image upload failed",
+    };
+  }
+}
+export async function uploadEmiratesIdDocument(
+  file: Express.Multer.File
+): Promise<{
+  success: boolean;
+  message: string;
+  uploadData?: { url: string; key: string; mimetype: string };
+}> {
+  try {
+    // Validate file type
+    const validTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.mimetype)) {
+      return {
+        success: false,
+        message: "Invalid file type. Only JPEG, PNG, and PDF are allowed.",
+      };
+    }
+
+    let processedFileBuffer: Buffer | undefined;
+    let processedMimeType = file.mimetype;
+
+    if (file.mimetype.startsWith("image/")) {
+      // Process images (resize and optimize)
+      processedFileBuffer = await sharp(file.buffer)
+        .resize({ width: 1200, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+      processedMimeType = "image/jpeg";
+    } else if (file.mimetype === "application/pdf") {
+      // Compress PDFs
+      processedFileBuffer = await compressPDFBuffer(file.buffer);
+    }
+
+    const processedFile = {
+      ...file,
+      buffer: processedFileBuffer || file.buffer,
+      mimetype: processedMimeType,
+    };
+
+    const uploadResult = await uploadFileToS3(
+      processedFile,
+      EMIRATES_ID_FOLDER
+    );
+
+    return {
+      success: true,
+      message: "Emirates ID document uploaded successfully",
+      uploadData: uploadResult,
+    };
+  } catch (err) {
+    console.error("Error uploading Emirates ID document:", err);
+    return {
+      success: false,
+      message: "Emirates ID document upload failed",
+    };
+  }
+}
+
+export async function uploadPassportDocument(
+  file: Express.Multer.File
+): Promise<{
+  success: boolean;
+  message: string;
+  uploadData?: { url: string; key: string; mimetype: string };
+}> {
+  try {
+    // Validate file type
+    const validTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (!validTypes.includes(file.mimetype)) {
+      return {
+        success: false,
+        message: "Invalid file type. Only JPEG, PNG, and PDF are allowed.",
+      };
+    }
+
+    let processedFileBuffer: Buffer | undefined;
+    let processedMimeType = file.mimetype;
+
+    if (file.mimetype.startsWith("image/")) {
+      // Process images (resize and optimize)
+      processedFileBuffer = await sharp(file.buffer)
+        .resize({ width: 1200, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+      processedMimeType = "image/jpeg";
+    } else if (file.mimetype === "application/pdf") {
+      // Compress PDFs
+      processedFileBuffer = await compressPDFBuffer(file.buffer);
+    }
+
+    const processedFile = {
+      ...file,
+      buffer: processedFileBuffer || file.buffer,
+      mimetype: processedMimeType,
+    };
+
+    const uploadResult = await uploadFileToS3(processedFile, PASSPORT_FOLDER);
+
+    return {
+      success: true,
+      message: "Passport document uploaded successfully",
+      uploadData: uploadResult,
+    };
+  } catch (err) {
+    console.error("Error uploading Passport document:", err);
+    return {
+      success: false,
+      message: "Passport document upload failed",
     };
   }
 }

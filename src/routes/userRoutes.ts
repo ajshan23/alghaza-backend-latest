@@ -42,6 +42,8 @@ router.post(
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "signatureImage", maxCount: 1 },
+    { name: "emiratesIdDocument", maxCount: 1 },
+    { name: "passportDocument", maxCount: 1 },
   ]),
   createUser
 );
@@ -55,10 +57,12 @@ router.get("/:id", getUser);
 // Update user
 router.put(
   "/:id",
-  authorize(["admin", "super_admin", "finance"]), // This should verify the user is authenticated
+  authorize(["admin", "super_admin", "finance"]),
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "signatureImage", maxCount: 1 },
+    { name: "emiratesIdDocument", maxCount: 1 },
+    { name: "passportDocument", maxCount: 1 },
   ]),
   updateUser
 );

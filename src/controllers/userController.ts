@@ -7,15 +7,26 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
   deleteFileFromS3,
+  uploadEmiratesIdDocument,
+  uploadPassportDocument,
   uploadSignatureImage,
   uploadUserProfileImage,
 } from "../utils/uploadConf";
 const SALT_ROUNDS = 10;
 
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, phoneNumbers, firstName, lastName, role, salary } =
-    req.body;
-console.log(req.body);
+  const {
+    email,
+    password,
+    phoneNumbers,
+    firstName,
+    lastName,
+    role,
+    salary,
+    accountNumber,
+    emiratesId,
+    passportNumber,
+  } = req.body;
 
   if (
     !email ||
@@ -25,7 +36,7 @@ console.log(req.body);
     !lastName ||
     !role
   ) {
-    throw new ApiError(400, "All fields are required");
+    throw new ApiError(400, "All required fields are missing");
   }
 
   // Validate salary for non-admin roles
@@ -43,42 +54,65 @@ console.log(req.body);
 
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Handle file uploads if they exist
+  // Handle all file uploads
   let profileImageUrl: string | undefined;
   let signatureImageUrl: string | undefined;
+  let emiratesIdDocumentUrl: string | undefined;
+  let passportDocumentUrl: string | undefined;
 
-  // Process profile image if uploaded
-  if (req.files && (req.files as any).profileImage) {
-    const profileImage = (req.files as any).profileImage[0];
-    const uploadResult = await uploadUserProfileImage(profileImage);
-    if (uploadResult.success && uploadResult.uploadData) {
-      profileImageUrl = uploadResult.uploadData.url;
+  // Process profile image
+  if (req.files?.profileImage?.[0]) {
+    const result = await uploadUserProfileImage(req.files.profileImage[0]);
+    if (result.success && result.uploadData) {
+      profileImageUrl = result.uploadData.url;
     }
   }
 
-  // Process signature image if uploaded
-  if (req.files && (req.files as any).signatureImage) {
-    const signatureImage = (req.files as any).signatureImage[0];
-    const uploadResult = await uploadSignatureImage(signatureImage);
-    if (uploadResult.success && uploadResult.uploadData) {
-      signatureImageUrl = uploadResult.uploadData.url;
+  // Process signature image
+  if (req.files?.signatureImage?.[0]) {
+    const result = await uploadSignatureImage(req.files.signatureImage[0]);
+    if (result.success && result.uploadData) {
+      signatureImageUrl = result.uploadData.url;
+    }
+  }
+
+  // Process Emirates ID document
+  if (req.files?.emiratesIdDocument?.[0]) {
+    const result = await uploadEmiratesIdDocument(
+      req.files.emiratesIdDocument[0]
+    );
+    if (result.success && result.uploadData) {
+      emiratesIdDocumentUrl = result.uploadData.url;
+    }
+  }
+
+  // Process Passport document
+  if (req.files?.passportDocument?.[0]) {
+    const result = await uploadPassportDocument(req.files.passportDocument[0]);
+    if (result.success && result.uploadData) {
+      passportDocumentUrl = result.uploadData.url;
     }
   }
 
   const user = await User.create({
     email,
     password: hashedPassword,
-    phoneNumbers,
+    phoneNumbers: Array.isArray(phoneNumbers) ? phoneNumbers : [phoneNumbers],
     firstName,
     lastName,
     role,
     salary: ["super_admin", "admin"].includes(role) ? undefined : salary,
+    accountNumber,
+    emiratesId,
+    emiratesIdDocument: emiratesIdDocumentUrl,
+    passportNumber,
+    passportDocument: passportDocumentUrl,
     profileImage: profileImageUrl,
     signatureImage: signatureImageUrl,
     createdBy: req.user?.userId,
   });
 
-  res.status(201).json(new ApiResponse(201, {}, "User created successfully"));
+  res.status(201).json(new ApiResponse(201, user, "User created successfully"));
 });
 
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
@@ -173,14 +207,13 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const updateData = req.body;
-  console.log("updateData", updateData);
 
   const user = await User.findById(id);
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
-  // Users can update their own profile, admins can update any
+  // Authorization check
   if (
     user._id.toString() !== req.user?.userId &&
     req.user?.role !== "admin" &&
@@ -189,98 +222,76 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(403, "Forbidden: Insufficient permissions");
   }
 
-  // Admins can change role, others can't
-  if (
-    updateData.role &&
-    req.user?.role !== "admin" &&
-    req.user?.role !== "super_admin"
-  ) {
-    throw new ApiError(403, "Forbidden: Only admins can change roles");
-  }
-
-  // Validate salary if role is being changed to non-admin
-  if (
-    updateData.role &&
-    !["super_admin", "admin"].includes(updateData.role) &&
-    !updateData.salary
-  ) {
-    throw new ApiError(400, "Salary is required for this role");
-  }
-
-  // Validate salary if updating a non-admin user
-  if (
-    !["super_admin", "admin"].includes(user.role) &&
-    updateData.salary === undefined &&
-    updateData.salary === null
-  ) {
-    throw new ApiError(400, "Salary is required for this role");
-  }
-
   // Handle password update
   if (updateData.password) {
     updateData.password = await bcrypt.hash(updateData.password, SALT_ROUNDS);
   }
 
   // Process profile image if uploaded
-  if (req.files && (req.files as any).profileImage) {
-    const profileImage = (req.files as any).profileImage[0];
-    const uploadResult = await uploadUserProfileImage(profileImage);
-
-    if (uploadResult.success && uploadResult.uploadData) {
-      // Delete old profile image if it exists
+  if (req.files?.profileImage?.[0]) {
+    const result = await uploadUserProfileImage(req.files.profileImage[0]);
+    if (result.success && result.uploadData) {
+      // Delete old profile image if exists
       if (user.profileImage) {
-        try {
-          await deleteFileFromS3(user.profileImage);
-        } catch (err) {
-          console.error("Error deleting old profile image:", err);
-        }
+        await deleteFileFromS3(user.profileImage).catch(console.error);
       }
-      updateData.profileImage = uploadResult.uploadData.url;
+      updateData.profileImage = result.uploadData.url;
     }
   }
 
   // Process signature image if uploaded
-  if (req.files && (req.files as any).signatureImage) {
-    const signatureImage = (req.files as any).signatureImage[0];
-    const uploadResult = await uploadSignatureImage(signatureImage);
-
-    if (uploadResult.success && uploadResult.uploadData) {
-      // Delete old signature image if it exists
+  if (req.files?.signatureImage?.[0]) {
+    const result = await uploadSignatureImage(req.files.signatureImage[0]);
+    if (result.success && result.uploadData) {
+      // Delete old signature image if exists
       if (user.signatureImage) {
-        try {
-          await deleteFileFromS3(user.signatureImage);
-        } catch (err) {
-          console.error("Error deleting old signature image:", err);
-        }
+        await deleteFileFromS3(user.signatureImage).catch(console.error);
       }
-      updateData.signatureImage = uploadResult.uploadData.url;
+      updateData.signatureImage = result.uploadData.url;
     }
   }
 
-  // Handle profile image removal if requested
-  if (updateData.removeProfileImage === "true") {
-    if (user.profileImage) {
-      try {
-        await deleteFileFromS3(user.profileImage);
-      } catch (err) {
-        console.error("Error deleting profile image:", err);
+  // Process Emirates ID document if uploaded
+  if (req.files?.emiratesIdDocument?.[0]) {
+    const result = await uploadEmiratesIdDocument(
+      req.files.emiratesIdDocument[0]
+    );
+    if (result.success && result.uploadData) {
+      // Delete old document if exists
+      if (user.emiratesIdDocument) {
+        await deleteFileFromS3(user.emiratesIdDocument).catch(console.error);
       }
+      updateData.emiratesIdDocument = result.uploadData.url;
     }
-    updateData.profileImage = undefined;
-    delete updateData.removeProfileImage;
   }
 
-  // Handle signature image removal if requested
-  if (updateData.removeSignatureImage === "true") {
-    if (user.signatureImage) {
-      try {
-        await deleteFileFromS3(user.signatureImage);
-      } catch (err) {
-        console.error("Error deleting signature image:", err);
+  // Process Passport document if uploaded
+  if (req.files?.passportDocument?.[0]) {
+    const result = await uploadPassportDocument(req.files.passportDocument[0]);
+    if (result.success && result.uploadData) {
+      // Delete old document if exists
+      if (user.passportDocument) {
+        await deleteFileFromS3(user.passportDocument).catch(console.error);
       }
+      updateData.passportDocument = result.uploadData.url;
     }
-    updateData.signatureImage = undefined;
-    delete updateData.removeSignatureImage;
+  }
+
+  // Handle document removals if requested
+  if (updateData.removeEmiratesIdDocument === "true") {
+    if (user.emiratesIdDocument) {
+      await deleteFileFromS3(user.emiratesIdDocument).catch(console.error);
+    }
+    updateData.emiratesIdDocument = undefined;
+    delete updateData.removeEmiratesIdDocument;
+  }
+
+  if (updateData.removePassportDocument === "true") {
+    if (user.passportDocument) {
+      await deleteFileFromS3(user.passportDocument).catch(console.error);
+    }
+    updateData.passportDocument = undefined;
+    delete updateData.removePassportDocument;
   }
 
   // Remove salary if role is being changed to admin/super_admin

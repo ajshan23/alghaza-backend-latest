@@ -19,7 +19,7 @@ import quotationRouter from "./routes/quotationRoutes";
 import lpoRouter from "./routes/lpoRoutes";
 import workCompletionRouter from "./routes/workCompletionRoutes";
 import attandanceRouter from "./routes/attandanceRoutes";
-
+import expenseRouter from "./routes/expenseRoutes";
 import { connectDb } from "./config/db";
 dotenv.config();
 
@@ -58,6 +58,8 @@ app.use("/api/quotation", quotationRouter);
 app.use("/api/lpo", lpoRouter);
 app.use("/api/work-completion", workCompletionRouter);
 app.use("/api/attandance", attandanceRouter);
+app.use("/api/expense", expenseRouter);
+
 app.use(errorHandler as ErrorRequestHandler);
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello, Secure and Logged World!");
