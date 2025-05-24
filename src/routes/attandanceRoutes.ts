@@ -5,6 +5,8 @@ import {
   getProjectAttendance,
   getTodayProjectAttendance,
   getAttendanceSummary,
+  dailyNormalAttendance,
+  getNormalMonthlyAttendance,
 } from "../controllers/attendanceController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 
@@ -43,4 +45,12 @@ router.get(
   authorize(["admin", "super_admin", "project_manager", "engineer"]),
   getAttendanceSummary
 );
+router.post(
+  "/normal",
+  authenticate,
+  authorize(["super_admin,admin"]),
+  markAttendance
+);
+router.get("/normal/daily", dailyNormalAttendance);
+router.get("/normal/monthly/userId", getNormalMonthlyAttendance);
 export default router;

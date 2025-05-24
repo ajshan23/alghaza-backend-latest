@@ -14,6 +14,7 @@ import {
   assignTeamAndDriver,
   getAssignedTeam,
   getDriverProjects,
+  generateInvoicePdf,
 } from "../controllers/projectController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 
@@ -43,6 +44,11 @@ router.get(
   "/:projectId/invoice",
   authorize(["admin", "super_admin", "finance", "engineer"]),
   generateInvoiceData
+);
+router.get(
+  "/:projectId/invoice/pdf",
+  authorize(["admin", "super_admin", "finance", "engineer"]),
+  generateInvoicePdf
 );
 // Update project - Admin/Engineer only
 router.put(

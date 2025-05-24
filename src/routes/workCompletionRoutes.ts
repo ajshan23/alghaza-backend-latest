@@ -6,6 +6,7 @@ import {
   deleteWorkCompletionImage,
   getProjectWorkCompletionImages,
   getCompletionData,
+  generateCompletionCertificatePdf,
 } from "../controllers/workCompletionController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 import { upload } from "../config/multer";
@@ -31,6 +32,12 @@ router.get("/project/:projectId", getWorkCompletion);
 
 router.get("/project/:projectId/images", getProjectWorkCompletionImages);
 router.get("/project/:projectId/work-comp", getCompletionData);
+router.get(
+  "/project/:projectId/certificate",
+
+  authorize(["engineer", "admin", "super_admin"]),
+  generateCompletionCertificatePdf
+);
 router.delete(
   "/:workCompletionId/images/:imageId",
   authorize(["engineer", "admin", "super_admin"]),
