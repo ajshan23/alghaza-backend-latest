@@ -7,6 +7,7 @@ import {
   deleteExpense,
   getExpenseById,
   getProjectLaborData,
+  generateExpensePdf,
 } from "../controllers/expenseController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 
@@ -56,6 +57,13 @@ router.delete(
   "/:expenseId",
   authorize(["admin", "super_admin", "finance"]),
   deleteExpense
+);
+
+router.get(
+  "/:id/pdf",
+  authenticate,
+  authorize(["admin", "super_admin", "engineer", "finance"]),
+  generateExpensePdf
 );
 
 export default router;

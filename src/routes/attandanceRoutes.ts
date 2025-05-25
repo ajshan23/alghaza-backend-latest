@@ -46,11 +46,12 @@ router.get(
   getAttendanceSummary
 );
 router.post(
-  "/normal",
+  "/normal/:userId",
   authenticate,
-  authorize(["super_admin,admin"]),
+  authorize(["super_admin", "admin"]),
   markAttendance
 );
 router.get("/normal/daily", dailyNormalAttendance);
-router.get("/normal/monthly/userId", getNormalMonthlyAttendance);
+router.get("/normal/monthly/:userId", getNormalMonthlyAttendance);
+
 export default router;

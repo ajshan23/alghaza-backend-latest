@@ -7,6 +7,8 @@ import { Project } from "../models/projectModel";
 import { Attendance } from "../models/attendanceModel";
 import { Types } from "mongoose";
 import dayjs from "dayjs";
+import { Quotation } from "../models/quotationModel";
+import puppeteer from "puppeteer";
 
 interface MaterialInput {
   description: string;
@@ -230,11 +232,21 @@ export const getExpenseById = asyncHandler(
     if (!expense) {
       throw new ApiError(404, "Expense not found");
     }
-    console.log(expense.laborDetails.workers);
+
+    // Add quotation data to the response
+    const quotation = await Quotation.findOne({ project: expense.project });
+    const responseData = {
+      ...expense.toObject(),
+      quotation: quotation
+        ? {
+            netAmount: quotation.netAmount,
+          }
+        : null,
+    };
 
     res
       .status(200)
-      .json(new ApiResponse(200, expense, "Expense fetched successfully"));
+      .json(new ApiResponse(200, responseData, "Expense fetched successfully"));
   }
 );
 
@@ -341,5 +353,285 @@ export const getExpenseSummary = asyncHandler(
       .json(
         new ApiResponse(200, summary, "Expense summary fetched successfully")
       );
+  }
+);
+export const generateExpensePdf = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    // Fetch expense with all related data
+    const expense = await Expense.findById(id)
+      .populate({
+        path: "project",
+        select: "projectName projectNumber",
+      })
+      .populate("createdBy", "firstName lastName")
+      .populate("laborDetails.workers.user", "firstName lastName profileImage")
+      .populate("laborDetails.driver.user", "firstName lastName profileImage");
+
+    if (!expense) {
+      throw new ApiError(404, "Expense not found");
+    }
+
+    // Fetch related quotation for profit calculation
+    const quotation = await Quotation.findOne({ project: expense.project });
+
+    // Format dates
+    const formatDate = (dateString: string | Date) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    };
+
+    // Calculate totals
+    const totalMaterialCost = expense.totalMaterialCost;
+    const totalLaborCost = expense.laborDetails.totalLaborCost;
+    const totalExpense = totalMaterialCost + totalLaborCost;
+    const quotationAmount = quotation?.netAmount || 0;
+    const profit = quotationAmount - totalExpense;
+    const profitPercentage = quotationAmount
+      ? (profit / quotationAmount) * 100
+      : 0;
+
+    // Prepare HTML content with logo
+    let htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+      <style type="text/css">
+        @page {
+          size: A4;
+          margin: 1cm;
+        }
+        body {
+          font-family: 'Arial', sans-serif;
+          font-size: 10pt;
+          line-height: 1.4;
+          color: #333;
+          margin: 0;
+          padding: 0;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 15px;
+        }
+        .logo {
+          height: 70px;
+          width: auto;
+        }
+        .document-title {
+          font-size: 14pt;
+          font-weight: bold;
+          margin: 5px 0;
+        }
+        .project-info {
+          font-size: 11pt;
+          margin-bottom: 10px;
+        }
+        .section {
+          margin-bottom: 15px;
+          page-break-inside: avoid;
+        }
+        .section-title {
+          font-size: 11pt;
+          font-weight: bold;
+          padding: 5px 0;
+          margin: 10px 0 5px 0;
+          border-bottom: 1px solid #ddd;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+          page-break-inside: avoid;
+        }
+        th {
+          background-color: #f5f5f5;
+          font-weight: bold;
+          padding: 6px 8px;
+          text-align: left;
+          border: 1px solid #ddd;
+        }
+        td {
+          padding: 6px 8px;
+          border: 1px solid #ddd;
+          vertical-align: top;
+        }
+        .total-row {
+          font-weight: bold;
+        }
+        .text-right {
+          text-align: right;
+        }
+        .footer {
+          margin-top: 20px;
+          font-size: 9pt;
+          color: #777;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <img class="logo" src="https://krishnadas-test-1.s3.ap-south-1.amazonaws.com/alghazal/logo.png" alt="Company Logo">
+        <div class="document-title">EXPENSE REPORT</div>
+        <div class="project-info">${expense.project.projectName} (${
+      expense.project.projectNumber
+    })</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">MATERIAL EXPENSES</div>
+        <table>
+          <thead>
+            <tr>
+              <th width="5%">No.</th>
+              <th width="40%">Description</th>
+              <th width="15%">Date</th>
+              <th width="20%">Invoice No</th>
+              <th width="20%" class="text-right">Amount (AED)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${expense.materials
+              .map(
+                (material, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${material.description}</td>
+                <td>${formatDate(material.date)}</td>
+                <td>${material.invoiceNo}</td>
+                <td class="text-right">${material.amount.toFixed(2)}</td>
+              </tr>
+            `
+              )
+              .join("")}
+            <tr class="total-row">
+              <td colspan="4">TOTAL MATERIAL COST</td>
+              <td class="text-right">${totalMaterialCost.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">LABOR DETAILS</div>
+        <table>
+          <thead>
+            <tr>
+              <th width="5%">No.</th>
+              <th width="65%">Description</th>
+              <th width="30%" class="text-right">Amount (AED)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Technicians Expenses</td>
+              <td class="text-right">${expense.laborDetails.workers
+                .reduce((sum, worker) => sum + worker.totalSalary, 0)
+                .toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>Driver Expenses</td>
+              <td class="text-right">${
+                expense.laborDetails.driver?.totalSalary.toFixed(2) || "0.00"
+              }</td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2">TOTAL LABOR COST</td>
+              <td class="text-right">${totalLaborCost.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">OTHER EXPENSES</div>
+        <table>
+          <thead>
+            <tr>
+              <th width="70%">Description</th>
+              <th width="30%" class="text-right">Amount (AED)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Fuel Charges (30.00 AED per day × 25 days)</td>
+              <td class="text-right">750.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">SUMMARY</div>
+        <table>
+          <tbody>
+            <tr class="total-row">
+              <td>TOTAL EXPENSES</td>
+              <td class="text-right">${totalExpense.toFixed(2)}</td>
+            </tr>
+            ${
+              quotation
+                ? `
+              <tr>
+                <td>Project Quotation Amount</td>
+                <td class="text-right">${quotationAmount.toFixed(2)}</td>
+              </tr>
+              <tr class="total-row">
+                <td>${profit >= 0 ? "PROFIT" : "LOSS"}</td>
+                <td class="text-right">${profit.toFixed(
+                  2
+                )} (${profitPercentage.toFixed(2)}%)</td>
+              </tr>
+            `
+                : ""
+            }
+          </tbody>
+        </table>
+      </div>
+    </body>
+    </html>
+    `;
+
+    // Generate PDF
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, {
+        waitUntil: ["load", "networkidle0", "domcontentloaded"],
+        timeout: 30000,
+      });
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: {
+          top: "1cm",
+          right: "1cm",
+          bottom: "1cm",
+          left: "1cm",
+        },
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=expense-report-${expense.project.projectNumber}.pdf`
+      );
+      res.send(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
   }
 );

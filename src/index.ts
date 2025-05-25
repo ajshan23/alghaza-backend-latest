@@ -20,6 +20,8 @@ import lpoRouter from "./routes/lpoRoutes";
 import workCompletionRouter from "./routes/workCompletionRoutes";
 import attandanceRouter from "./routes/attandanceRoutes";
 import expenseRouter from "./routes/expenseRoutes";
+import analyticsRouter from "./routes/analyticalRoute";
+
 import { connectDb } from "./config/db";
 dotenv.config();
 
@@ -38,7 +40,13 @@ const app = express();
 //   //   ], // Allow all common headers
 //   // })
 // );
-app.use(cors());
+
+app.use(
+  cors({
+    origin: "http://localhost:5173", // 👈 must be specific, not '*'
+    credentials: true, // 👈 required for cookies/auth headers
+  })
+);
 // app.use(limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -59,6 +67,7 @@ app.use("/api/lpo", lpoRouter);
 app.use("/api/work-completion", workCompletionRouter);
 app.use("/api/attandance", attandanceRouter);
 app.use("/api/expense", expenseRouter);
+app.use("/api/analytics", analyticsRouter);
 
 app.use(errorHandler as ErrorRequestHandler);
 app.get("/", (req: Request, res: Response) => {

@@ -11,6 +11,8 @@ import { User } from "../models/userModel";
 export const markAttendance = asyncHandler(
   async (req: Request, res: Response) => {
     const { projectId, userId } = req.params;
+    console.log(userId);
+
     const { present, type = "project" } = req.body;
     const markedBy = req.user?.userId;
 
@@ -358,7 +360,7 @@ export const dailyNormalAttendance = asyncHandler(
         markedAt: attendance?.createdAt || null,
       };
     });
-    console.log("Daily Normal Attendance Result:", result);
+    // console.log("Daily Normal Attendance Result:", result);
 
     res.status(200).json(
       new ApiResponse(
